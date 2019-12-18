@@ -1,19 +1,19 @@
-%% FUNCTION Least_SRMTL
+%% FUNCTION Least_SRMTL_kernel
 %   Sparse Structure-Regularized Learning with Least Squares Loss.
+%   Extended version for kernel.
 %
 %% OBJECTIVE
 %   argmin_W { sum_i^t (0.5 * norm (Y{i} - X{i}' * W(:, i))^2)
 %            + rho1 * norm(W*R, 'fro')^2 + rho2 * \|W\|_1}
 %
 %% R encodes structure relationship
-%   1)Structure order is given by using [lambda1 -lambda1 0 ...; 0 lambda2 -lambda2 ...; ...]
-%    e.g.: R=zeros(t,t-1);R(1:(t+1):end)=lambda_t;R(2:(t+1):end)=-lambda_t,
-%    where lambda is the degree of connectivity between the tasks.
+%   1)Structure order is given by using [1 -1 0 ...; 0 1 -1 ...; ...]
+%    e.g.: R=zeros(t,t-1);R(1:(t+1):end)=1;R(2:(t+1):end)=-1;
 %   2)Ridge penalty term by setting: R = eye(t)
 %   3)All related regularized: R = eye (t) - ones (t) / t
 %
 %% INPUT
-%   X: {n * d} * t - input matrix
+%   X: {n1 * n1}, {n2 * n2}, ..., {nt * nt} - input matrix
 %   Y: {n * 1} * t - output matrix
 %   R: regularization structure
 %   rho1: structure regularization parameter
@@ -44,6 +44,10 @@
 %
 %   Last modified on June 3, 2012.
 %
+%% MODIFIED BY
+%  Amanda O. C. Ayres
+%  June, 2019
+%
 %% RELATED PAPERS
 %
 % [1] Evgeniou, T. and Pontil, M. Regularized multi-task learning, KDD 2004
@@ -53,7 +57,7 @@
 %  Logistic_SRMTL, init_opts
 
 %% Code starts here
-function [W, funcVal] = Least_SRMTL(X, Y, R, rho1, rho2, opts)
+function [W, funcVal] = Least_SRMTL_kernel(X, Y, R, rho1, rho2, opts)
 
 if nargin <5
     error('\n Inputs: X, Y, R, rho1, and rho2 should be specified!\n');
@@ -75,7 +79,9 @@ end
 
 
 task_num  = length (X);
-dimension = size(X{1}, 1);
+for i = 1 : size(X, 2)
+    dimension(i) = size(X{i}, 1);
+end
 funcVal = [];
 
 % precomputation.
@@ -84,21 +90,26 @@ XY = cell(task_num, 1);
 W0_prep = [];
 for t_idx = 1: task_num
     XY{t_idx} = X{t_idx}*Y{t_idx};
-    W0_prep = cat(2, W0_prep, XY{t_idx});
-end
+end    
 
 % initialize a starting point
 if opts.init==2
-    W0 = zeros(dimension, task_num);
+    W0 = zeros(max(dimension), task_num);  
 elseif opts.init == 0
+    for t_idx = 1: task_num
+        W0_prep = cat(2, W0_prep, XY{t_idx});
+    end    
     W0 = W0_prep;
 else
     if isfield(opts,'W0')
         W0=opts.W0;
-        if (nnz(size(W0)-[dimension, task_num]))
+        if (nnz(size(W0)-[max(dimension), task_num]))
             error('\n Check the input .W0');
         end
     else
+        for t_idx = 1: task_num
+            W0_prep = cat(2, W0_prep, XY{t_idx});
+        end        
         W0=W0_prep;
     end
 end
@@ -208,8 +219,7 @@ W = Wzp;
         l1_comp_val = sum(sum(abs(z)));
     end
 
-    function [grad_W] = gradVal_eval(W, rho1)
-        
+    function [grad_W] = gradVal_eval(W, rho1)     
         if opts.pFlag
             grad_W = zeros(size(W));
             parfor t_ii = 1:task_num
@@ -219,11 +229,11 @@ W = Wzp;
                 %grad_W = cat(2, grad_W, X{t_ii}*(X{t_ii}' * W(:,t_ii)-Y{t_ii}) );
             end
         else
-            grad_W = [];
-            for t_ii = 1:task_num
-                XWi = X{t_ii}' * W(:,t_ii);
-                XTXWi = X{t_ii}* XWi;
-                grad_W = cat(2, grad_W, XTXWi - XY{t_ii});
+            grad_W = zeros(max(dimension), task_num);
+            for t_ii = 1:task_num                                
+                XWi = X{t_ii}' * W(1 : size(X{t_ii}, 1),t_ii);               
+                XTXWi = X{t_ii}* XWi;               
+                grad_W(1 : dimension(t_ii), t_ii) = XTXWi - XY{t_ii};             
                 %grad_W = cat(2, grad_W, X{t_ii}*(X{t_ii}' * W(:,t_ii)-Y{t_ii}) );
             end
         end
@@ -239,7 +249,7 @@ W = Wzp;
             end
         else
             for i = 1: task_num
-                funcVal = funcVal + 0.5 * norm (Y{i} - X{i}' * W(:, i))^2;
+                funcVal = funcVal + 0.5 * norm (Y{i} - X{i}' * W(1 : size(X{i}, 1), i))^2;
             end
         end
         funcVal = funcVal + rho1 * norm(W*R, 'fro')^2 ...
