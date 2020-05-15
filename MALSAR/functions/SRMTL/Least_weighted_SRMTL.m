@@ -88,12 +88,8 @@ RRt = R * R';
 XY = cell(task_num, 1);
 W0_prep = [];
 for t_idx = 1: task_num
-    try
-        XY{t_idx} = X{t_idx} * theta{t_idx} * Y{t_idx};
-        %XY{t_idx} = X{t_idx} * Y{t_idx};
-    catch e
-        disp('erro');
-    end
+    %XY{t_idx} = X{t_idx}*Y{t_idx};
+    XY{t_idx} = X{t_idx} * theta{t_idx} * Y{t_idx};
     W0_prep = cat(2, W0_prep, XY{t_idx});
 end
 
@@ -222,19 +218,16 @@ W = Wzp;
         if opts.pFlag
             grad_W = zeros(size(W));
             parfor t_ii = 1:task_num
-                XWi = X{t_ii}' * W(:,t_ii);
-                XTXWi = X{t_ii}* XWi;
+                %XTXWi = X{t_ii}* X{t_ii}' * W(:,t_ii);
+                XTXWi = X{t_ii} * theta{t_ii} * X{t_ii}' * W(:,t_ii);
                 grad_W(:, t_ii) = XTXWi - XY{t_ii};
                 %grad_W = cat(2, grad_W, X{t_ii}*(X{t_ii}' * W(:,t_ii)-Y{t_ii}) );
             end
         else
             grad_W = [];
             for t_ii = 1:task_num
-                try
-                    XTXWi = X{t_ii} * theta{t_ii} * X{t_ii}' * W(:,t_ii);
-                catch e
-                    disp('erro');
-                end
+                %XTXWi = X{t_ii}* X{t_ii}' * W(:,t_ii);
+                XTXWi = X{t_ii} * theta{t_ii} * X{t_ii}' * W(:,t_ii);
                 grad_W = cat(2, grad_W, XTXWi - XY{t_ii});
                 %grad_W = cat(2, grad_W, X{t_ii}*(X{t_ii}' * W(:,t_ii)-Y{t_ii}) );
             end
@@ -247,11 +240,13 @@ W = Wzp;
         funcVal = 0;
         if opts.pFlag
             parfor i = 1: task_num
-                funcVal = funcVal + 0.5 * norm (theta{i} * (Y{i} - X{i}' * W(:, i)))^2;
+                %funcVal = funcVal + 0.5 * norm (Y{i} - X{i}' * W(:, i))^2;
+                funcVal = funcVal + 0.5 * (Y{i} - X{i}' * W(:, i))' * theta{i} * (Y{i} - X{i}' * W(:, i));
             end
         else
             for i = 1: task_num
-                funcVal = funcVal + 0.5 * norm (theta{i} * (Y{i} - X{i}' * W(:, i)))^2;
+                %funcVal = funcVal + 0.5 * norm (Y{i} - X{i}' * W(:, i))^2;
+                funcVal = funcVal + 0.5 * (Y{i} - X{i}' * W(:, i))' * theta{i} * (Y{i} - X{i}' * W(:, i));
             end
         end
         funcVal = funcVal + rho1 * norm(W*R, 'fro')^2 ...
